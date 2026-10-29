@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Space Radiation Lab: effects on microelectronics</title>
+<style>
+:root{--bg:#f3f5f8;--card:#fff;--tx:#121722;--mut:#5a6577;--bd:#d9dee6;--ac:#1d4ed8;--hot:#dc2626;--warn:#d97706;--ok:#059669;--curve:#1d4ed8;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0f17;--card:#141b27;--tx:#e8edf5;--mut:#93a0b5;--bd:#26324a;--ac:#6aa0ff;--hot:#f87171;--warn:#fbbf24;--ok:#34d399;--curve:#6aa0ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0f17;--card:#141b27;--tx:#e8edf5;--mut:#93a0b5;--bd:#26324a;--ac:#6aa0ff;--hot:#f87171;--warn:#fbbf24;--ok:#34d399;--curve:#6aa0ff;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px 14px 40px}
+h1{font:700 1.5rem/1.2 Georgia,"Times New Roman",serif;margin:4px 0 4px}
+.sub{color:var(--mut);margin:0 0 14px;max-width:62ch}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px}
+canvas{width:100%;height:auto;display:block;border-radius:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+button,select{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;cursor:pointer}
+button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.flare{border-color:var(--warn);color:var(--warn)}
+.ctrl{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px 18px}
+.ctrl label{display:block;font-size:.88rem;color:var(--mut)}
+.ctrl label b{color:var(--tx);font-weight:600;float:right}
+input[type=range]{width:100%;accent-color:var(--ac)}
+.met{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.m{border:1px solid var(--bd);border-radius:8px;padding:8px 10px}
+.m span{display:block;font-size:.78rem;color:var(--mut)}
+.m strong{font:600 1.2rem/1.3 Georgia,serif}
+#st{font-weight:700}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--hot)}
+.note{font-size:.82rem;color:var(--mut)}
+h2{font:600 1rem/1.3 Georgia,serif;margin:0 0 8px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style></head><body><main>
+<h1>Space radiation vs. microchips</h1>
+<p class="sub">A live memory chip in orbit. Change the environment, shielding and chip technology, and watch particles flip bits (single-event upsets) while dose slowly degrades the transistors.</p>
+
+<div class="card">
+<div class="row">
+<button id="pl">Pause</button>
+<button id="fl" class="flare">Solar flare (6 s)</button>
+<button id="sc">Scrub memory</button>
+<button id="rs">Reset</button>
+<label class="note"><input type="checkbox" id="as"> auto-scrub (ECC)</label>
+<span class="note">Status: <span id="st" class="ok">Nominal</span></span>
+</div>
+<canvas id="cv" aria-label="Animated memory chip being hit by radiation particles"></canvas>
+</div>
+
+<div class="card">
+<div class="row" role="group" aria-label="Particle type">
+<span class="note">Particles:</span>
+<button data-t="m" class="on">Mixed</button><button data-t="p">Protons</button><button data-t="i">Heavy ions</button><button data-t="e">Electrons</button>
+</div>
+<div class="ctrl">
+<label>Orbit / environment
+<select id="or" style="width:100%"><option value="0">Low Earth orbit (ISS-like)</option><option value="1" selected>Geostationary orbit</option><option value="2">Deep space (GCR)</option><option value="3">Jupiter-class belts</option></select></label>
+<label>Chip technology node <b id="ndv"></b>
+<select id="nd" style="width:100%"><option>7</option><option>14</option><option>28</option><option selected>65</option><option>130</option><option>250</option></select></label>
+<label>Particle flux <b id="flv"></b><input id="fl2" type="range" min="1" max="100" value="14"></label>
+<label>Particle energy (MeV) <b id="env"></b><input id="en" type="range" min="0" max="2.7" step="0.01" value="1.78"></label>
+<label>Heavy-ion LET (MeV·cm²/mg) <b id="lev"></b><input id="le" type="range" min="-1" max="2" step="0.01" value="0.7"></label>
+<label>Aluminium shield <b id="shv"></b><input id="sh" type="range" min="0" max="20" step="0.5" value="2.5"></label>
+<label>Time warp <b id="wpv"></b><input id="wp" type="range" min="0" max="2.5" step="0.01" value="1.3"></label>
+</div>
+</div>
+
+<div class="card"><div class="met">
+<div class="m"><span>Mission time</span><strong id="mt">0 d</strong></div>
+<div class="m"><span>Total dose (TID)</span><strong id="td">0 krad</strong></div>
+<div class="m"><span>Threshold shift ΔVth</span><strong id="dv">0 mV</strong></div>
+<div class="m"><span>Leakage current</span><strong id="lk">×1</strong></div>
+<div class="m"><span>Bit upsets (SEU)</span><strong id="su">0</strong></div>
+<div class="m"><span>Multi-bit upsets</span><strong id="mb">0</strong></div>
+<div class="m"><span>Latch-ups (SEL)</span><strong id="sl">0</strong></div>
+<div class="m"><span>Memory errors</span><strong id="er">0%</strong></div>
+<div class="m"><span>Critical charge Qcrit</span><strong id="qc">0 fC</strong></div>
+</div></div>
+
+<div class="card"><h2>Dose degradation curve for the selected node</h2>
+<canvas id="ch" aria-label="Threshold voltage shift versus total dose"></canvas>
+<p class="note">Simplified educational model, not for mission design. Each animated particle samples the real flux; cumulative counts and dose follow the time warp. Smaller nodes tolerate dose better but upset at lower charge. Heavy ions above LET ≈ 30 can trigger latch-up, which power-cycles and wipes memory.</p></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const dpr=Math.min(window.devicePixelRatio||1,2);
+const cv=$('cv'),c=cv.getContext('2d');cv.width=700*dpr;cv.height=430*dpr;c.scale(dpr,dpr);
+const ch=$('ch'),d=ch.getContext('2d');ch.width=700*dpr;ch.height=230*dpr;d.scale(dpr,dpr);
+const COLS=28,ROWS=9,CW=22,X0=42,Y0=190,N=COLS*ROWS,SY=96;
+const ORB=[2,15,8,1000],VIS=[1,2,1.5,4],ORN=['LEO','GEO','Deep space','Jupiter'];
+let ref,bits,stuck,P,FX,hist,S,type='m';
+const stars=Array.from({length:70},()=>[Math.random()*700,Math.random()*92,Math.random()*1.4+.3]);
+function reset(){ref=Array.from({length:N},()=>Math.random()<.5?1:0);bits=ref.slice();stuck=new Array(N).fill(false);P=[];FX=[];hist=[];S={dose:0,days:0,seu:0,mbu:0,sel:0,latch:0,flare:0,paused:S?S.paused:false,acc:0,scr:0}}
+reset();
+function prm(){return{E:Math.pow(10,+$('en').value),LET:Math.pow(10,+$('le').value),t:+$('sh').value,node:+$('nd').value,flux:+$('fl2').value,warp:Math.pow(10,+$('wp').value),o:+$('or').value}}
+function spawn(q){let ty=type;if(ty==='m'){const r=Math.random();ty=r<.6?'p':r<.85?'e':'i'}
+ P.push({x:X0+Math.random()*COLS*CW,y:0,vx:(Math.random()-.5)*24,vy:250+Math.random()*80,ty,hy:Y0+Math.floor(Math.random()*ROWS)*CW+CW/2,pass:false,col:ty==='p'?'#f59e0b':ty==='e'?'#22d3ee':'#f43f5e'})}
+function fx(x,y,col,big){FX.push({x,y,r:3,life:1,col,big})}
+function hit(p,q){const col=Math.floor((p.x-X0)/CW),row=Math.floor((p.hy-Y0)/CW),i=row*COLS+col;if(col<0||col>=COLS||i<0||i>=N)return;
+ let L;if(p.ty==='e')L=.002;else if(p.ty==='i')L=q.LET*(.6+.8*Math.random());
+ else{L=.8/Math.pow(1+q.E/6,.7);if(Math.random()<.06)L=Math.max(L,Math.min(15,3+q.E/30)*Math.random()+.5)}
+ const Q=10.8*L,Qc=.08*q.node,pr=1/(1+Math.exp(-(Q/Qc-1)*7));
+ if(Math.random()<pr&&!stuck[i]){bits[i]^=1;S.seu++;fx(p.x,p.hy,'#ef4444',false);
+  if(Q>3*Qc&&col<COLS-1&&!stuck[i+1]){bits[i+1]^=1;S.mbu++;fx(p.x+CW,p.hy,'#ef4444',false)}}
+ else fx(p.x,p.hy,p.col,false);
+ if(L>=30&&Math.random()<.08&&!S.latch){S.latch=1.8;S.sel++}}
+function step(dt){const q=prm();
+ if(S.flare>0)S.flare-=dt;
+ const fm=(S.flare>0?10:1);
+ if(S.latch>0){S.latch-=dt;if(S.latch<=0){bits=ref.slice();for(let i=0;i<N;i++)if(stuck[i])bits[i]=Math.random()<.5?1:0}}
+ S.acc+=q.flux*VIS[q.o]*fm*dt*.5;let n=Math.min(Math.floor(S.acc),40);S.acc-=n;if(S.acc>5)S.acc=0;
+ if(P.length<320)while(n-->0)spawn(q);
+ for(const p of P){const py=p.y;p.y+=p.vy*dt;p.x=Math.max(X0,Math.min(X0+COLS*CW-1,p.x+p.vx*dt));
+  if(!p.pass&&py<SY&&p.y>=SY){p.pass=true;const lam=p.ty==='e'?.4*Math.min(q.E,8)+.1:p.ty==='i'?1+q.E/10:3+q.E/8;
+   if(Math.random()>Math.exp(-q.t/lam)){p.dead=1;fx(p.x,SY,p.col,true)}}
+  if(!p.dead&&p.y>=p.hy){p.dead=1;hit(p,q)}}
+ P=P.filter(p=>!p.dead);
+ for(const f of FX){f.r+=dt*(f.big?40:55);f.life-=dt*2.2}FX=FX.filter(f=>f.life>0);
+ const sf=Math.min(6,Math.max(.02,Math.exp(-(q.t-2.5)/4)));
+ S.dose+=ORB[q.o]/365*sf*(q.flux/14)*(S.flare>0?6:1)*q.warp*dt;S.days+=q.warp*dt;
+ if($('as').checked){S.scr+=dt;if(S.scr>1.5){S.scr=0;scrub()}}
+ const dV=dvOf(S.dose,q.node),fr=Math.min(1,Math.max(0,(dV-150)/250))*.6;let sc=stuck.filter(Boolean).length;
+ while(sc<fr*N){const k=Math.floor(Math.random()*N);if(!stuck[k]){stuck[k]=true;bits[k]=Math.random()<.5?1:0;sc++}}
+ if(S.dose>0&&(!hist.length||hist[hist.length-1][0]!==S.dose))hist.push([S.dose,dV]);if(hist.length>600)hist.shift()}
+function dvOf(D,node){return 3*Math.pow(node/100,1.5)*Math.pow(D,.8)}
+function scrub(){for(let i=0;i<N;i++)if(!stuck[i])bits[i]=ref[i]}
+function errs(){let e=0;for(let i=0;i<N;i++)if(stuck[i]||bits[i]!==ref[i])e++;return e}
+function draw(){const q=prm(),dV=dvOf(S.dose,q.node);
+ c.fillStyle='#090e1a';c.fillRect(0,0,700,430);
+ c.fillStyle='#cfd8ea';for(const s of stars){c.globalAlpha=.4+.5*Math.random();c.fillRect(s[0],s[1],s[2],s[2])}c.globalAlpha=1;
+ c.font='12px sans-serif';c.fillStyle='#7f8cab';c.fillText('Space: '+ORN[q.o]+(S.flare>0?'  (solar flare!)':''),12,18);
+ const sh=q.t>0?Math.min(52,q.t*2.6+2):0;
+ if(sh){const g=c.createLinearGradient(0,SY,0,SY+sh);g.addColorStop(0,'#8a97ad');g.addColorStop(1,'#5a6780');c.fillStyle=g;c.fillRect(30,SY,640,sh);c.fillStyle='#e8edf5';c.fillText('Al shield '+q.t+' mm',40,SY+Math.min(sh-4,14))}
+ else{c.fillStyle='#7f8cab';c.fillText('No shielding',40,SY+14)}
+ const lat=S.latch>0;
+ c.fillStyle=lat?'#3a1218':'#121b2b';c.strokeStyle=lat?'#ef4444':'#2c3a57';c.lineWidth=2;c.fillRect(30,176,640,240);c.strokeRect(30,176,640,240);
+ for(let i=0;i<N;i++){const x=X0+(i%COLS)*CW,y=Y0+Math.floor(i/COLS)*CW,bad=bits[i]!==ref[i];
+  c.fillStyle=stuck[i]?'#7f1d1d':bits[i]?'#2f5fc4':'#1b2a44';c.fillRect(x+1,y+1,CW-2,CW-2);
+  if(bad&&!stuck[i]){c.strokeStyle='#ef4444';c.lineWidth=1.5;c.strokeRect(x+1.5,y+1.5,CW-3,CW-3)}
+  c.fillStyle=stuck[i]?'#fca5a5':'#c9d6f2';c.font='11px monospace';c.fillText(stuck[i]?'x':bits[i],x+7,y+15)}
+ if(dV>0){c.fillStyle='rgba(245,158,11,'+Math.min(.45,dV/400)+')';c.fillRect(30,176,640,240)}
+ if(lat){c.fillStyle='#fecaca';c.font='bold 14px sans-serif';c.fillText('LATCH-UP: current spike, power cycling...',200,168)}
+ c.fillStyle='#7f8cab';c.font='12px sans-serif';c.fillText('SRAM array, '+q.node+' nm, '+N+' bits (red outline = flipped)',42,430-6);
+ c.lineWidth=2;for(const p of P){c.strokeStyle=p.col;c.beginPath();c.moveTo(p.x,p.y-12);c.lineTo(p.x,p.y);c.stroke()}
+ for(const f of FX){c.strokeStyle=f.col;c.globalAlpha=Math.max(0,f.life);c.lineWidth=2;c.beginPath();c.arc(f.x,f.big?SY:f.y,f.r,0,6.3);c.stroke();c.globalAlpha=1}
+ // metrics
+ const e=errs(),ep=100*e/N;$('mt').textContent=S.days<365?S.days.toFixed(0)+' d':(S.days/365).toFixed(1)+' yr';
+ $('td').textContent=(S.dose<10?S.dose.toFixed(2):S.dose.toFixed(0))+' krad';$('dv').textContent=dV.toFixed(0)+' mV';
+ const lk=Math.exp(dV/60);$('lk').textContent=lk>999?'×'+lk.toExponential(0):'×'+lk.toFixed(1);
+ $('su').textContent=S.seu;$('mb').textContent=S.mbu;$('sl').textContent=S.sel;$('er').textContent=ep.toFixed(1)+'%';$('qc').textContent=(.08*q.node).toFixed(1)+' fC';
+ const st=$('st');if(dV>=250||ep>25){st.textContent='Failed';st.className='bad'}else if(dV>=60||S.sel||ep>3){st.textContent='Degraded';st.className='warn'}else{st.textContent='Nominal';st.className='ok'}
+ $('ndv').textContent=q.node+' nm';$('flv').textContent=q.flux+'/s';$('env').textContent=q.E.toFixed(q.E<10?1:0)+' MeV';$('lev').textContent=q.LET.toFixed(q.LET<10?1:0);$('shv').textContent=q.t+' mm';$('wpv').textContent=q.warp.toFixed(0)+' d/s';
+ chart(q,dV)}
+function chart(q,dV){const cs=getComputedStyle(document.documentElement),L=48,R=686,T=14,B=196,w=R-L,h=B-T;
+ d.clearRect(0,0,700,230);d.font='11px sans-serif';
+ const X=D=>L+(Math.log10(Math.max(D,.1))+1)/4*w,Y=v=>B-Math.min(v,400)/400*h;
+ d.strokeStyle=cs.getPropertyValue('--bd');d.fillStyle=cs.getPropertyValue('--mut');d.lineWidth=1;
+ for(const D of [.1,1,10,100,1000]){d.beginPath();d.moveTo(X(D),T);d.lineTo(X(D),B);d.stroke();d.fillText(D+' krad',X(D)-16,B+14)}
+ for(const v of [0,100,200,300,400]){d.beginPath();d.moveTo(L,Y(v));d.lineTo(R,Y(v));d.stroke();d.fillText(v+' mV',4,Y(v)+4)}
+ d.setLineDash([5,4]);d.strokeStyle=cs.getPropertyValue('--warn');d.beginPath();d.moveTo(L,Y(60));d.lineTo(R,Y(60));d.stroke();
+ d.strokeStyle=cs.getPropertyValue('--hot');d.beginPath();d.moveTo(L,Y(250));d.lineTo(R,Y(250));d.stroke();d.setLineDash([]);
+ d.fillStyle=cs.getPropertyValue('--warn');d.fillText('degraded',R-52,Y(60)-4);d.fillStyle=cs.getPropertyValue('--hot');d.fillText('failure',R-40,Y(250)-4);
+ d.strokeStyle=cs.getPropertyValue('--curve');d.lineWidth=2;d.beginPath();for(let k=0;k<=120;k++){const D=Math.pow(10,-1+k/30),x=X(D),y=Y(dvOf(D,q.node));k?d.lineTo(x,y):d.moveTo(x,y)}d.stroke();
+ const px=X(S.dose),py=Y(dV);d.fillStyle=cs.getPropertyValue('--hot');d.beginPath();d.arc(Math.min(px,R),py,6,0,6.3);d.fill()}
+let last=performance.now();
+function loop(t){const dt=Math.min(.05,(t-last)/1000);last=t;if(!S.paused)step(dt);draw();requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+$('pl').onclick=e=>{S.paused=!S.paused;e.target.textContent=S.paused?'Resume':'Pause'};
+$('fl').onclick=()=>{S.flare=6};$('sc').onclick=scrub;$('rs').onclick=reset;
+document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{type=b.dataset.t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b))});
+</script></body></html>
